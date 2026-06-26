@@ -36,6 +36,13 @@ KIEMA Editing App is a cross-platform website built on AI-powered technology ins
 - ✅ Caps: max 200 scenes, max 30 min total
 - ✅ Tested: 15/15 backend tests, 100% frontend flows passed in iteration 2
 
+## Long-form Upgrade: Reference Pictures + Per-Scene Scripts (2026-02-26, iter 3)
+- ✅ Each scene now carries `{prompt, reference_image_b64?}`. Upload a picture per scene + write the script.
+- ✅ Optional "Master style reference" image applied to any scene without its own reference.
+- ✅ Backend: Claude Sonnet 4.5 vision describes the reference image → that visual brief is prepended to the Sora 2 prompt for that scene, so Sora follows the look.
+- ✅ Light response payloads (`has_reference` flag instead of full base64 in GET responses).
+- ✅ Tested: 18/18 backend tests, 10/10 frontend UI checks passed in iteration 3.
+
 ## Prioritized Backlog
 **P0 — done in v1**
 - Image generation, text-to-video, image-to-video, gallery, auth

@@ -1,0 +1,90 @@
+{
+  "theme": "dark",
+  "archetype": "5 (Luxury / Cinematic Technical)",
+  "design_philosophy": "Layered darkness with high-contrast, technical precision. We deliberately avoid the ubiquitous 'purple-blue AI gradient' and instead use deep void black combined with sharp, energetic Vibrant Coral accents. The interface feels like a high-end camera or professional NLE (Non-Linear Editor) interface: pure function, exposing the tools while the vibrant generated 4K media remains the undisputed hero. It must scream 'professional-grade' yet remain fully accessible.",
+  "typography": {
+    "font_families": {
+      "headings": "Outfit",
+      "body": "Manrope",
+      "mono": "JetBrains Mono"
+    },
+    "hierarchy": {
+      "h1": "text-5xl sm:text-6xl tracking-tighter font-medium",
+      "h2": "text-3xl sm:text-4xl tracking-tight font-medium",
+      "h3": "text-xl sm:text-2xl font-medium",
+      "body": "text-base leading-relaxed",
+      "labels": "text-xs tracking-[0.2em] uppercase font-semibold text-zinc-500"
+    }
+  },
+  "colors": {
+    "background": {
+      "base": "#0A0A0B",
+      "panel": "#141416",
+      "floating": "#1D1D20"
+    },
+    "text": {
+      "primary": "#FAFAFA",
+      "secondary": "#A1A1AA",
+      "muted": "#52525B"
+    },
+    "accent": {
+      "primary": "#FF4D4D",
+      "primary_hover": "#FF7676",
+      "glow": "rgba(255, 77, 77, 0.4)"
+    },
+    "borders": {
+      "default": "#27272A",
+      "focus": "#FF4D4D"
+    }
+  },
+  "surfaces_and_materials": {
+    "marketing_hero": "Glassmorphism overlays (backdrop-blur-xl bg-black/40) over dynamic AI images. Never use flat pure black if an image is beneath it.",
+    "workspace_panels": "Grid Borders ('Technical Look'). 1px solid #27272A. Flat backgrounds. Zero drop shadows. Use inner borders to define sections (border-r, border-b).",
+    "buttons": "Primary CTA uses Vibrant Coral. Ghost buttons use border-white/10 hover:bg-white/5 hover:text-white. Sharp corners (rounded-none or max rounded-md).",
+    "inputs": "Flat fill (#0A0A0B), 1px stroke (#27272A), crisp focus rings (ring-1 ring-[#FF4D4D]).",
+    "animations": "Snappy micro-interactions for tools (0.15s ease-out). Smooth fade-ins for generated images."
+  },
+  "layout": {
+    "marketing": "Mode A (Tetris Grid). Asymmetrical bento layouts for feature showcase (Image-to-Video, Text-to-Video). Massive spacing (py-24, gap-8) to let the platform breathe.",
+    "workspace": "Mode B (Control Room). Strict, dense layout. Sidebar (w-64) + Main Canvas (flex-1) + Properties Panel (w-80). tight spacing (gap-4). 100% viewport height (h-screen) with no jagged bottoms."
+  },
+  "component_guidelines": {
+    "navigation": "Sticky, glassmorphism (bg-[#0A0A0B]/80 backdrop-blur-md), bottom border (border-white/10).",
+    "generation_canvas": "Checkerboard dark pattern or pure #050505 to make the 4K image pop. Use flex centering for output media.",
+    "prompt_input": "Floating command-palette style at the bottom of the canvas, heavily blurred background, glowing subtle border. Add a subtle inner shadow.",
+    "history_gallery": "Masonry or dense grid layout for past generations, hover states reveal download/animate actions in an overlay.",
+    "testing": "All interactive elements MUST include data-testid (e.g., data-testid='generate-video-button', data-testid='prompt-input')."
+  },
+  "icons_and_assets": {
+    "icon_library": "lucide-react",
+    "icon_style": "1.5px stroke weight, sharp and technical."
+  },
+  "media": {
+    "hero_background": {
+      "url": "https://images.pexels.com/photos/30018094/pexels-photo-30018094.jpeg",
+      "description": "Abstract red fluid waves used as a dramatic, high-end texture behind the hero section."
+    },
+    "editor_texture": {
+      "url": "https://images.pexels.com/photos/29586670/pexels-photo-29586670.jpeg",
+      "description": "Smooth black and blue fluid artwork for empty states or deep UI backgrounds."
+    },
+    "generation_sample_1": {
+      "url": "https://images.pexels.com/photos/9007366/pexels-photo-9007366.jpeg",
+      "description": "High-quality 4K landscape showcasing the text-to-image capabilities."
+    },
+    "user_avatar": {
+      "url": "https://images.unsplash.com/photo-1601637155580-ac6c49428450",
+      "description": "Creator portrait for user profile or testimonial sections."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Build the app in a dark theme exclusively, avoiding standard SaaS generic templates.",
+    "Do not use generic purple/blue AI gradients. Stick to the void black (#0A0A0B) and Vibrant Coral (#FF4D4D) accent.",
+    "Implement the Workspace as a 'Control Room' taking up full 100vh, ensuring tools and canvas have precise borders and density.",
+    "Marketing landing page must use heavy padding, bento grids, and the hero image overlaid with max bg-black/50.",
+    "Integrate Shadcn components (Dialog, Slider for duration, Select for style) but strip away soft radii—make them sharp (rounded-md max).",
+    "Ensure the text-to-video / image-to-video feature forms have a dense, technical UI.",
+    "Apply data-testid to every button, input, and interactive tab.",
+    "Use standard React .js files and styling (no .tsx required per environment)."
+  ]
+}

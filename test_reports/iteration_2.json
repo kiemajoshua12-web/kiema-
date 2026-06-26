@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 2 — long-form (up to 30 min) video pipeline. Backend: 15/15 pytest passed including /api/longform/plan (validation + real Claude happy-path returning exactly 3 scenes / 24s estimated for brief 'A cat in a hat'), /api/longform/create validation (empty, >200 scenes, invalid clip_duration, invalid size, whitespace-only), list 401 unauth, list returns {items:[]} for fresh user, 404 on nonexistent get/delete, and ffmpeg 5.1.9 callable. Frontend: /longform loads under injected session cookie with h1 'Compose your epic.', all required data-testids present (longform-brief, length-preset-60/300/900/1800, custom-length-min, clip-duration-select, size-select, title-input, plan-button, refresh-jobs), empty state shows 'No long-form renders yet', and length preset reactivity is correct (5 min @ 8s → 38 scenes ✓, 1 min @ 8s → 8 scenes, 30 min @ 8s → 200 scenes capped). Studio /studio shows sidebar-longform-link and navigates to /longform; Navbar shows nav-longform. Real Sora 2 renders were NOT triggered as instructed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_longform_api.py",
+    "/app/test_reports/pytest/longform_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~650 lines and mixes concerns (auth, image gen, video gen, long-form worker, media serving). Consider splitting into modules (auth.py, generation.py, longform.py, media.py) as it continues to grow. Acceptable for MVP but approaching the 700-line guidance.",
+    "_process_longform_job is fire-and-forget via asyncio.create_task — if the FastAPI process restarts mid-render, queued jobs are silently dropped. Consider persisting a 'queued' status check on startup and resuming, or moving to a real queue (RQ/Celery/Arq) for production durability.",
+    "ffmpeg concat step always re-encodes with libx264 — for 30-min videos this can be expensive. If Sora always returns the same codec/size, consider trying `-c copy` first and falling back to re-encode on mismatch.",
+    "Long-form list endpoint excludes scenes ({'scenes': 0}) which is good for payload size, but the get endpoint returns full scenes array; fine for now.",
+    "No per-user concurrency cap on /api/longform/create — a user could queue many 30-min jobs and exhaust Sora credits. Consider rate-limiting concurrent in-progress jobs per user (e.g. max 1)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_longform_api.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (all critical flows passed)"},
+  "test_credentials": "Seeded via mongosh per /app/auth_testing.md. Token: TEST_lf_session_1782471380170 (cleaned up after run).",
+  "seed_data_creation": "1 TEST_ user + 1 session created and deleted after testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_longform_api.py (reads KIEMA_SESSION_TOKEN env). Seed user+session via mongosh from /app/auth_testing.md. The plan happy-path test makes a real Claude (sonnet-4-5) call — cost is small (~3 scenes). NEVER call /api/longform/create with valid scenes during testing — that triggers Sora 2 renders (minutes per clip + heavy credit burn). Only test validation 400s. ffmpeg 5.1.9 is installed at /usr/bin/ffmpeg. Frontend uses cookie-based session_token (httponly, secure, samesite=none); inject via page.context.add_cookies as in auth_testing.md.",
+  "rca of the issue": "N/A — no bugs found."
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { generations as genApi, videoUrl } from "@/lib/apiClient";
 import { Image as ImageIcon, Film, Wand2, Download, Loader2, Sparkles, AlertCircle, Upload, X } from "lucide-react";
@@ -142,10 +143,20 @@ export default function Studio() {
             ))}
           </div>
 
-          <div className="hidden lg:block mt-auto p-5 border-t border-white/10">
-            <div className="label-eyebrow mb-2">Engine</div>
-            <div className="text-sm text-zinc-300">Gemini Nano Banana · Sora 2</div>
-            <div className="label-eyebrow mt-1">EMERGENT LLM KEY</div>
+          <div className="hidden lg:block mt-auto p-5 border-t border-white/10 space-y-3">
+            <Link
+              to="/longform"
+              data-testid="sidebar-longform-link"
+              className="block border border-[#FF4D4D]/40 bg-[#FF4D4D]/5 hover:bg-[#FF4D4D]/10 p-3 transition-colors"
+            >
+              <div className="label-eyebrow text-[#FF4D4D]">New · up to 30 min</div>
+              <div className="text-sm font-medium mt-1">Long-form video →</div>
+              <div className="text-xs text-zinc-400 mt-0.5">Stitched cinematic stories</div>
+            </Link>
+            <div>
+              <div className="label-eyebrow mb-1">Engine</div>
+              <div className="text-sm text-zinc-300">Gemini Nano Banana · Sora 2</div>
+            </div>
           </div>
         </aside>
 

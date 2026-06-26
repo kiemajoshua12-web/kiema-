@@ -50,6 +50,17 @@ export default function Navbar() {
                 Studio
               </Link>
               <Link
+                to="/longform"
+                data-testid="nav-longform"
+                className={`px-3 py-1.5 rounded-md transition-colors ${
+                  location.pathname.startsWith("/longform")
+                    ? "text-white bg-white/5"
+                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Long-form
+              </Link>
+              <Link
                 to="/gallery"
                 data-testid="nav-gallery"
                 className={`px-3 py-1.5 rounded-md transition-colors ${

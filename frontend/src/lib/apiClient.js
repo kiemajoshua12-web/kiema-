@@ -21,4 +21,13 @@ export const generations = {
   video: (payload) => api.post("/generate/video", payload).then(r => r.data),
 };
 
+export const longform = {
+  plan: (payload) => api.post("/longform/plan", payload).then(r => r.data),
+  create: (payload) => api.post("/longform/create", payload).then(r => r.data),
+  list: () => api.get("/longform").then(r => r.data),
+  get: (job_id) => api.get(`/longform/${job_id}`).then(r => r.data),
+  remove: (job_id) => api.delete(`/longform/${job_id}`).then(r => r.data),
+};
+
 export const videoUrl = (video_id) => `${API}/media/video/${video_id}`;
+export const longformVideoUrl = (job_id) => `${API}/media/longform/${job_id}`;

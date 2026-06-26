@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import Landing from "@/pages/Landing";
 import Studio from "@/pages/Studio";
 import Gallery from "@/pages/Gallery";
+import LongForm from "@/pages/LongForm";
 import AuthCallback from "@/pages/AuthCallback";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
@@ -31,6 +32,14 @@ function AppRouter() {
         element={
           <ProtectedRoute>
             <Gallery />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/longform"
+        element={
+          <ProtectedRoute>
+            <LongForm />
           </ProtectedRoute>
         }
       />

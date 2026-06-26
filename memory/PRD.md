@@ -29,6 +29,13 @@ KIEMA Editing App is a cross-platform website built on AI-powered technology ins
 - ✅ Frontend: Landing (cinematic dark hero with bento features), Studio (3 tools, prompt bar, recent panel), Gallery (filters + detail modal), AuthCallback, ProtectedRoute
 - ✅ Tested: 9/9 backend tests, 100% frontend critical-flow Playwright tests passed in iteration 1
 
+## What's Been Implemented (Long-form, 2026-02-26)
+- ✅ Backend: `/api/longform/plan` (Claude scene planner), `/api/longform/create` (queues background render), `/api/longform`, `/api/longform/{job_id}`, DELETE, `/api/media/longform/{job_id}`
+- ✅ Pipeline: Sora 2 per-scene render → ffmpeg concat with libx264 re-encode → final mp4 served via API
+- ✅ Frontend: `/longform` page with brief input, length presets (1/5/15/30 min), clip duration & size selectors, AI scene planner, editable scene list, jobs rail with live progress polling, detail modal with download
+- ✅ Caps: max 200 scenes, max 30 min total
+- ✅ Tested: 15/15 backend tests, 100% frontend flows passed in iteration 2
+
 ## Prioritized Backlog
 **P0 — done in v1**
 - Image generation, text-to-video, image-to-video, gallery, auth

@@ -367,12 +367,18 @@ class ScenesPlanRequest(BaseModel):
     clip_duration: int = 8  # seconds per clip (4/8/12)
 
 
+class LongformScene(BaseModel):
+    prompt: str
+    reference_image_b64: Optional[str] = None  # raw base64 (no data: prefix)
+
+
 class LongformCreateRequest(BaseModel):
     title: Optional[str] = "Untitled long-form"
-    scenes: List[str]
+    scenes: List[LongformScene]
     clip_duration: int = 8
     size: str = "1280x720"
     model: str = "sora-2"
+    style_reference_image_b64: Optional[str] = None  # global style ref applied to scenes without their own
 
 
 def _ffmpeg_concat(clip_paths: List[Path], out_path: Path) -> bool:
@@ -401,6 +407,33 @@ def _ffmpeg_concat(clip_paths: List[Path], out_path: Path) -> bool:
     return True
 
 
+async def _describe_image_for_video(image_b64: str) -> Optional[str]:
+    """Use Claude vision to describe an image as a visual style brief for Sora.
+
+    Returns a short paragraph capturing subjects, palette, lighting, mood, composition.
+    Returns None on failure (caller will skip the style block).
+    """
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"vis_{uuid.uuid4().hex[:10]}",
+            system_message=(
+                "You analyze a reference image and produce a tight visual brief that another "
+                "video model can use to match its style. Describe subjects, palette, lighting, "
+                "lens/composition, and mood in 2-3 sentences. No preamble, no commentary."
+            ),
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        msg = UserMessage(
+            text="Produce the visual brief now.",
+            file_contents=[ImageContent(image_b64)],
+        )
+        text = await chat.send_message(msg)
+        return str(text).strip() or None
+    except Exception as e:
+        logger.warning("Vision description failed: %s", e)
+        return None
+
+
 async def _process_longform_job(job_id: str):
     """Background worker. Renders each scene with Sora 2 then stitches."""
     job = await db.longform_jobs.find_one({"job_id": job_id}, {"_id": 0})
@@ -411,20 +444,44 @@ async def _process_longform_job(job_id: str):
             {"job_id": job_id},
             {"$set": {"status": "rendering", "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
-        scenes = job["scenes"]
+        scenes = job["scenes"]  # list of {prompt, reference_image_b64?}
         clip_duration = job["clip_duration"]
         size = job["size"]
         model = job["model"]
+        global_style_b64 = job.get("style_reference_image_b64")
+
+        # Resolve global style description once (re-use for any scene without its own ref)
+        global_style_desc: Optional[str] = None
+        if global_style_b64:
+            global_style_desc = await _describe_image_for_video(global_style_b64)
 
         clip_paths: List[Path] = []
         clip_dir = LONGFORM_DIR / job_id
         clip_dir.mkdir(parents=True, exist_ok=True)
 
-        for idx, scene_prompt in enumerate(scenes):
+        for idx, scene in enumerate(scenes):
             clip_path = clip_dir / f"clip_{idx:03d}.mp4"
+            scene_prompt = scene.get("prompt") if isinstance(scene, dict) else str(scene)
+            scene_ref = scene.get("reference_image_b64") if isinstance(scene, dict) else None
+
+            # Build final Sora prompt with optional style brief
+            style_desc: Optional[str] = None
+            if scene_ref:
+                style_desc = await _describe_image_for_video(scene_ref)
+            elif global_style_desc:
+                style_desc = global_style_desc
+
+            if style_desc:
+                final_prompt = (
+                    f"Follow this visual style closely: {style_desc} "
+                    f"Scene: {scene_prompt}. Cinematic 4K, smooth motion."
+                )
+            else:
+                final_prompt = f"{scene_prompt}. Cinematic 4K, smooth motion."
+
             try:
                 result = await asyncio.to_thread(
-                    _run_sora, scene_prompt, size, clip_duration, model, clip_path
+                    _run_sora, final_prompt, size, clip_duration, model, clip_path
                 )
                 if not result:
                     raise RuntimeError(f"Sora returned no bytes for scene {idx}")
@@ -559,7 +616,16 @@ async def create_longform(req: LongformCreateRequest, request: Request):
         raise HTTPException(status_code=400, detail="clip_duration must be 4, 8 or 12")
     if req.size not in ("1280x720", "1792x1024", "1024x1792", "1024x1024"):
         raise HTTPException(status_code=400, detail="invalid size")
-    scenes = [s.strip() for s in req.scenes if s and s.strip()]
+    # Normalize scenes (now objects with prompt + optional reference_image_b64)
+    scenes = []
+    for s in req.scenes:
+        p = (s.prompt or "").strip()
+        if not p:
+            continue
+        scenes.append({
+            "prompt": p,
+            "reference_image_b64": s.reference_image_b64 or None,
+        })
     if not scenes:
         raise HTTPException(status_code=400, detail="scenes required")
     if len(scenes) > MAX_SCENES:
@@ -575,6 +641,7 @@ async def create_longform(req: LongformCreateRequest, request: Request):
         "user_id": user.user_id,
         "title": req.title or "Untitled long-form",
         "scenes": scenes,
+        "style_reference_image_b64": req.style_reference_image_b64 or None,
         "clip_duration": req.clip_duration,
         "size": req.size,
         "model": req.model,
@@ -589,6 +656,11 @@ async def create_longform(req: LongformCreateRequest, request: Request):
     await db.longform_jobs.insert_one(doc)
     asyncio.create_task(_process_longform_job(job_id))
     doc.pop("_id", None)
+    # Strip large image data from response payload
+    doc.pop("style_reference_image_b64", None)
+    for sc in doc.get("scenes", []):
+        if isinstance(sc, dict):
+            sc.pop("reference_image_b64", None)
     return doc
 
 
@@ -603,9 +675,23 @@ async def list_longform(request: Request):
 @api_router.get("/longform/{job_id}")
 async def get_longform(job_id: str, request: Request):
     user = await get_current_user(request)
-    doc = await db.longform_jobs.find_one({"job_id": job_id, "user_id": user.user_id}, {"_id": 0})
+    doc = await db.longform_jobs.find_one(
+        {"job_id": job_id, "user_id": user.user_id},
+        {"_id": 0, "style_reference_image_b64": 0},
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
+    # Replace per-scene base64 with a small "has_reference" flag to keep response light
+    light_scenes = []
+    for sc in doc.get("scenes", []):
+        if isinstance(sc, dict):
+            light_scenes.append({
+                "prompt": sc.get("prompt", ""),
+                "has_reference": bool(sc.get("reference_image_b64")),
+            })
+        else:
+            light_scenes.append({"prompt": str(sc), "has_reference": False})
+    doc["scenes"] = light_scenes
     return doc
 
 

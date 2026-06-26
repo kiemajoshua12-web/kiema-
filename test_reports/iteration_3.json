@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 3 testing of KIEMA long-form upgrade (per-scene reference images + master/global style ref). Backend: 18/18 pytest passed including new scene-object validation, 422 on legacy string format, immediate-delete after create, light GET payload with has_reference flag, list endpoint without scenes field. Frontend: all new data-testids verified — global-style-upload/clear, scene-ref-upload/thumb/clear-{i}, manual-add-scene, plus AI plan flow working end-to-end via Claude. No Sora renders were triggered (all created jobs deleted immediately).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/longform", "issues": ["Hydration warning in console: '<span> cannot be a child of <option>' — likely from a <select> renderer somewhere in the tree. Not affecting functionality but should be cleaned up.", "Spec called for total=24s but the UI 'custom-length-min' input has min=1 minute (60s), so the smallest selectable target via UI is 60s — produces 8 scenes at clip=8s instead of the 3 mentioned in the request. API itself accepts 24s; this is a UI-only constraint mismatch with the test spec."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_longform_api.py",
+    "/app/test_reports/pytest/longform_iter3_results.xml"
+  ],
+  "action_items": [
+    "Optional: lower UI minimum custom length to allow sub-1-min totals (e.g. seconds-level granularity) if you want UI to match the 24s test case in the spec.",
+    "Optional: fix the React hydration warning about <span> inside <option>.",
+    "No critical fixes required — feature works as designed."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew past 700 lines (~736). Worth splitting into modules (longform/, auth/, studio/).",
+    "_process_longform_job is fired via asyncio.create_task right after insert; a delete arriving milliseconds later can still race with the worker which already called find_one. In testing nothing leaked but production should consider a small 'queued' guard before invoking Sora (re-check existence after status update).",
+    "POST /api/longform/create accepts and stores style_reference_image_b64 in Mongo as full base64 — for large images this bloats job docs significantly. Consider storing only the derived Claude style description (or hashing to a blob store).",
+    "Frontend reads file as data URL and splits on ','; works for typical images but the b64 part is sent to API uncompressed and uncapped — add a client-side size cap (e.g. 2MB) to avoid huge payloads."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_longform_api.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18)",
+    "frontend": "100% (all 10 UI checks passed)"
+  },
+  "test_credentials": "Session token seeded via mongosh: test_session_1782472405805 (user test-user-1782472405805). Per /app/auth_testing.md.",
+  "seed_data_creation": "1 test user + session in test_database. No long-form jobs leaked (all immediately deleted).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest file (/app/backend/tests/test_longform_api.py) is reusable as regression for long-form. Set KIEMA_SESSION_TOKEN env to a freshly seeded session_token (mongosh script in /app/auth_testing.md). Tiny 1x1 PNG b64 constant TINY_PNG_B64 reusable. Frontend testids of note: global-style-upload/clear, scene-ref-upload-{i}, scene-ref-thumb-{i}, scene-ref-clear-{i}, scene-{i}, manual-add-scene, plan-button, start-render-button. NEVER click start-render-button without immediate cleanup — would trigger paid Sora 2 renders.",
+  "rca of the issue": "N/A — no functional issues found. Minor design notes documented under design_issues / critical_code_review_comments."
+}

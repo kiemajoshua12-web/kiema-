@@ -4,7 +4,8 @@ import { longform as lf, longformVideoUrl } from "@/lib/apiClient";
 import { toast, Toaster } from "sonner";
 import {
   Film, Wand2, Sparkles, Loader2, AlertCircle, Download, Trash2,
-  Hourglass, CheckCircle2, XCircle, Plus, ChevronDown, ChevronUp
+  Hourglass, CheckCircle2, XCircle, Plus, ChevronDown, ChevronUp,
+  ImagePlus, X
 } from "lucide-react";
 
 const CLIP_DURATIONS = [4, 8, 12];
@@ -106,12 +107,15 @@ export default function LongForm() {
   const [clipDuration, setClipDuration] = useState(8);
   const [size, setSize] = useState("1280x720");
   const [title, setTitle] = useState("");
-  const [scenes, setScenes] = useState([]); // string[]
+  // Each scene: {prompt: string, refDataUrl?: string, refB64?: string}
+  const [scenes, setScenes] = useState([]);
+  // Global style reference image (applied to scenes without their own ref)
+  const [globalStyle, setGlobalStyle] = useState(null); // {dataUrl, b64}
   const [planning, setPlanning] = useState(false);
   const [creating, setCreating] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [openJob, setOpenJob] = useState(null);
-  const [expandScenes, setExpandScenes] = useState(false);
+  const [expandScenes, setExpandScenes] = useState(true);
   const pollRef = useRef(null);
 
   const loadJobs = useCallback(async () => {
@@ -161,7 +165,9 @@ export default function LongForm() {
         total_duration_s: targetSeconds,
         clip_duration: clipDuration,
       });
-      setScenes(r.scenes || []);
+      // Convert planned text scenes into rich scene objects
+      const planned = (r.scenes || []).map((p) => ({ prompt: p, refDataUrl: null, refB64: null }));
+      setScenes(planned);
       if (!title) setTitle(brief.slice(0, 60));
       toast.success(`Planned ${r.count} scenes`);
     } catch (e) {
@@ -172,24 +178,30 @@ export default function LongForm() {
   };
 
   const handleStart = async () => {
-    if (scenes.length === 0) {
-      toast.error("Plan scenes first");
+    const ready = scenes.filter((s) => (s.prompt || "").trim().length > 0);
+    if (ready.length === 0) {
+      toast.error("Add at least one scene with a script");
       return;
     }
     setCreating(true);
     try {
-      const job = await lf.create({
+      const payload = {
         title: title || "Untitled",
-        scenes,
+        scenes: ready.map((s) => ({
+          prompt: s.prompt.trim(),
+          reference_image_b64: s.refB64 || null,
+        })),
         clip_duration: clipDuration,
         size,
-      });
+        style_reference_image_b64: globalStyle?.b64 || null,
+      };
+      const job = await lf.create(payload);
       toast.success("Render started — this can take a while");
       setOpenJob(job);
-      // reset compose
       setBrief("");
       setScenes([]);
       setTitle("");
+      setGlobalStyle(null);
       loadJobs();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start render");
@@ -210,11 +222,41 @@ export default function LongForm() {
     }
   };
 
-  const updateScene = (i, v) => {
-    setScenes((s) => s.map((x, idx) => (idx === i ? v : x)));
+  const updateScenePrompt = (i, v) => {
+    setScenes((s) => s.map((x, idx) => (idx === i ? { ...x, prompt: v } : x)));
+  };
+  const setSceneRef = (i, dataUrl, b64) => {
+    setScenes((s) => s.map((x, idx) => (idx === i ? { ...x, refDataUrl: dataUrl, refB64: b64 } : x)));
+  };
+  const clearSceneRef = (i) => {
+    setScenes((s) => s.map((x, idx) => (idx === i ? { ...x, refDataUrl: null, refB64: null } : x)));
   };
   const removeScene = (i) => setScenes((s) => s.filter((_, idx) => idx !== i));
-  const addScene = () => setScenes((s) => [...s, ""]);
+  const addScene = () => setScenes((s) => [...s, { prompt: "", refDataUrl: null, refB64: null }]);
+
+  const onPickFile = (i) => (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      const b64 = dataUrl.split(",")[1] || "";
+      setSceneRef(i, dataUrl, b64);
+    };
+    reader.readAsDataURL(f);
+  };
+
+  const onPickGlobalStyle = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      const b64 = dataUrl.split(",")[1] || "";
+      setGlobalStyle({ dataUrl, b64 });
+    };
+    reader.readAsDataURL(f);
+  };
 
   const estimatedTotalSeconds = scenes.length * clipDuration;
 
@@ -232,8 +274,8 @@ export default function LongForm() {
               Compose your epic.
             </h1>
             <p className="text-sm text-zinc-400 mt-2 max-w-2xl">
-              Describe your story. KIEMA will plan every scene, render each clip with Sora 2, and
-              stitch them into a single continuous video.
+              Upload reference pictures, write your script scene by scene, and KIEMA will follow
+              your visuals — rendering each clip with Sora 2, then stitching them into a single video.
             </p>
           </div>
 
@@ -248,6 +290,39 @@ export default function LongForm() {
                 placeholder="A solo astronaut wakes up on Mars to find a single blooming flower — explore its origins across seasons, weather, and time…"
                 className="mt-2 w-full bg-[#0A0A0B] border border-white/10 focus:border-[#FF4D4D] outline-none px-4 py-3 text-sm resize-none transition-colors"
               />
+            </div>
+
+            <div>
+              <label className="label-eyebrow">Master style reference (optional)</label>
+              <div className="mt-2 flex items-center gap-3">
+                {globalStyle ? (
+                  <div className="relative">
+                    <img
+                      src={globalStyle.dataUrl}
+                      alt="style"
+                      className="h-20 w-20 object-cover border border-white/15"
+                    />
+                    <button
+                      onClick={() => setGlobalStyle(null)}
+                      data-testid="global-style-clear"
+                      className="absolute -top-2 -right-2 w-5 h-5 grid place-items-center bg-black border border-white/20 rounded-full"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <label
+                    data-testid="global-style-upload"
+                    className="h-20 w-20 grid place-items-center border border-dashed border-white/20 cursor-pointer hover:border-[#FF4D4D] text-zinc-500 hover:text-white transition-colors"
+                  >
+                    <ImagePlus className="w-5 h-5" />
+                    <input type="file" accept="image/*" hidden onChange={onPickGlobalStyle} />
+                  </label>
+                )}
+                <div className="text-xs text-zinc-400 max-w-md leading-relaxed">
+                  Upload a picture that captures the look you want — palette, character, mood. KIEMA will follow this style across every scene that doesn't have its own reference.
+                </div>
+              </div>
             </div>
 
             <div>
@@ -320,20 +395,33 @@ export default function LongForm() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-white/5 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-4">
               <div className="text-xs text-zinc-500">
                 <span className="font-mono text-zinc-300">{sceneCount}</span> scenes
                 · estimated total <span className="font-mono text-zinc-300">{fmtClock(sceneCount * clipDuration)}</span>
               </div>
-              <button
-                data-testid="plan-button"
-                onClick={handlePlan}
-                disabled={planning}
-                className="btn-coral h-10 px-5 rounded-md inline-flex items-center gap-2 disabled:opacity-60"
-              >
-                {planning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                Plan scenes
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  data-testid="plan-button"
+                  onClick={handlePlan}
+                  disabled={planning}
+                  className="h-10 px-5 border border-white/15 hover:bg-white/5 inline-flex items-center gap-2 disabled:opacity-60"
+                >
+                  {planning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                  AI plan scenes
+                </button>
+                <button
+                  data-testid="manual-add-scene"
+                  onClick={() => {
+                    addScene();
+                    setExpandScenes(true);
+                  }}
+                  className="h-10 px-5 border border-white/15 hover:bg-white/5 inline-flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add scene manually
+                </button>
+              </div>
             </div>
 
             <div className="flex items-start gap-2 text-xs text-zinc-500 border border-white/5 bg-black/30 p-3">
@@ -361,25 +449,63 @@ export default function LongForm() {
                   data-testid="toggle-scenes"
                 >
                   {expandScenes ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  {expandScenes ? "Collapse" : "Edit scenes"}
+                  {expandScenes ? "Collapse" : "Show scenes"}
                 </button>
               </div>
               {expandScenes && (
-                <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+                <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
                   {scenes.map((s, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <div className="label-eyebrow w-10 pt-2.5 text-right shrink-0">{(i + 1).toString().padStart(3, "0")}</div>
+                    <div key={i} className="border border-white/5 bg-black/30 p-3 flex gap-3">
+                      <div className="label-eyebrow w-10 text-right shrink-0 pt-1">{(i + 1).toString().padStart(3, "0")}</div>
+
+                      {/* Reference image slot */}
+                      <div className="shrink-0">
+                        {s.refDataUrl ? (
+                          <div className="relative">
+                            <img
+                              data-testid={`scene-ref-thumb-${i}`}
+                              src={s.refDataUrl}
+                              alt={`scene ${i + 1} ref`}
+                              className="h-20 w-20 object-cover border border-white/15"
+                            />
+                            <button
+                              onClick={() => clearSceneRef(i)}
+                              data-testid={`scene-ref-clear-${i}`}
+                              className="absolute -top-2 -right-2 w-5 h-5 grid place-items-center bg-black border border-white/20 rounded-full"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label
+                            data-testid={`scene-ref-upload-${i}`}
+                            title="Add reference image for this scene"
+                            className="h-20 w-20 grid place-items-center border border-dashed border-white/15 cursor-pointer hover:border-[#FF4D4D] text-zinc-500 hover:text-white transition-colors"
+                          >
+                            <ImagePlus className="w-4 h-4" />
+                            <input type="file" accept="image/*" hidden onChange={onPickFile(i)} />
+                          </label>
+                        )}
+                        <div className="label-eyebrow text-center mt-1 text-[9px]">
+                          {s.refDataUrl ? "ref set" : "add ref"}
+                        </div>
+                      </div>
+
+                      {/* Prompt textarea */}
                       <textarea
                         data-testid={`scene-${i}`}
-                        value={s}
-                        rows={2}
-                        onChange={(e) => updateScene(i, e.target.value)}
+                        value={s.prompt}
+                        rows={3}
+                        placeholder="Describe what happens in this scene…"
+                        onChange={(e) => updateScenePrompt(i, e.target.value)}
                         className="flex-1 bg-[#0A0A0B] border border-white/10 focus:border-[#FF4D4D] outline-none px-3 py-2 text-sm resize-none"
                       />
+
                       <button
                         onClick={() => removeScene(i)}
-                        className="px-2 py-2 text-zinc-500 hover:text-red-400"
+                        className="px-2 self-start mt-1 text-zinc-500 hover:text-red-400"
                         data-testid={`scene-remove-${i}`}
+                        title="Remove scene"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -388,7 +514,7 @@ export default function LongForm() {
                   <button
                     onClick={addScene}
                     data-testid="scene-add"
-                    className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-white/15 text-xs text-zinc-400 hover:text-white hover:border-white/30"
+                    className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-white/15 text-xs text-zinc-400 hover:text-white hover:border-white/30"
                   >
                     <Plus className="w-3 h-3" /> Add scene
                   </button>
